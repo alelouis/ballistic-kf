@@ -1,9 +1,11 @@
+use linearkalman::{predict_step, update_step, KalmanState};
 use rand_distr::{Distribution, Normal};
 use rapier2d::prelude::*;
+use rulinalg::vector::Vector as ruVec;
 use serde_json::json;
 use std::sync::mpsc::Sender;
 
-pub(crate) fn simulation(tx: Sender<[f64; 2]>, requester: zmq::Socket) {
+pub(crate) fn simulation(tx: Sender<[f64; 5]>) {
     let mut rigid_body_set = RigidBodySet::new();
     let mut collider_set = ColliderSet::new();
 
@@ -37,9 +39,17 @@ pub(crate) fn simulation(tx: Sender<[f64; 2]>, requester: zmq::Socket) {
     let event_handler = ();
 
     let normal = Normal::new(0.0, 2.0).unwrap();
+    let kf = crate::kalman::init_filter();
+    let mut last_state = KalmanState {
+        x: (kf.x0).clone(),
+        p: (kf.p0).clone(),
+    };
+    let mut time = 0.0;
+    let mut dt = 1. / 60.;
 
     /* Run the game loop, stepping the simulation once per frame. */
-    for _ in 0..3000 {
+    for idx in 0..3000 {
+        time += dt;
         physics_pipeline.step(
             &gravity,
             &integration_parameters,
@@ -58,15 +68,33 @@ pub(crate) fn simulation(tx: Sender<[f64; 2]>, requester: zmq::Socket) {
 
         /* Sending simulation data to GUI thread*/
         let ball_body = &rigid_body_set[ball_body_handle];
-        let payload = [
+        let measurements = [
             ball_body.translation().x as f64 + normal.sample(&mut rand::thread_rng()),
             ball_body.translation().y as f64 + normal.sample(&mut rand::thread_rng()),
         ];
+
+        // Kalman predict and update
+        let data = ruVec::new([measurements[0], measurements[1]]);
+        let kf_pred = predict_step(&kf, &last_state);
+        let kf_update = update_step(&kf, &kf_pred, &data);
+        last_state = kf_update;
+
+        // Send to GUI
+        let payload = [
+            time,
+            measurements[0],
+            measurements[1],
+            last_state.x[0],
+            last_state.x[1],
+        ];
+
         tx.send(payload)
-            .expect("Couldn't send from physics thread.");
-        let json_payload = json!(payload);
-        let mut msg = zmq::Message::new();
-        requester.send(&json_payload.to_string(), 0).unwrap();
-        requester.recv(&mut msg, 0).unwrap();
+            .expect("Couldn't send from physics thread to GUI thread.");
+
+        // zmq part
+        // let json_payload = json!(payload);
+        // let mut msg = zmq::Message::new();
+        // requester.send(&json_payload.to_string(), 0).unwrap();
+        // requester.recv(&mut msg, 0).unwrap();
     }
 }

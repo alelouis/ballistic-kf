@@ -1,4 +1,4 @@
-use egui::plot::{Legend, Line, LineStyle, Plot, PlotPoints};
+use egui::plot::{Legend, Line, LineStyle, Plot, PlotPoints, Points};
 use egui::*;
 
 use std::sync::mpsc::Receiver;
@@ -7,13 +7,13 @@ use std::sync::mpsc::Receiver;
 pub struct GraphView {
     label: String,
     initialized: bool,
-    data: Vec<[f64; 2]>,
+    data: Vec<[f64; 5]>,
     #[serde(skip)]
-    rx: Option<Receiver<[f64; 2]>>,
+    rx: Option<Receiver<[f64; 5]>>,
 }
 
 impl GraphView {
-    pub fn new(__cc: &eframe::CreationContext<'_>, rx: Option<Receiver<[f64; 2]>>) -> Self {
+    pub fn new(__cc: &eframe::CreationContext<'_>, rx: Option<Receiver<[f64; 5]>>) -> Self {
         Self {
             label: "Demo GUI".to_owned(),
             initialized: false,
@@ -37,10 +37,12 @@ impl GraphView {
         }
     }
 
-    fn get_data(&mut self) -> PlotPoints {
+    fn get_data(&mut self) -> (Vec<f64>, Vec<Vec<[f64; 2]>>) {
         self.push_data();
-        let points: PlotPoints = PlotPoints::from(self.data.clone());
-        points
+        let time: Vec<f64> = self.data.iter().map(|x| x[0]).collect();
+        let measure_data: Vec<[f64; 2]> = self.data.iter().map(|x| [x[1], x[2]]).collect();
+        let kf_data: Vec<[f64; 2]> = self.data.iter().map(|x| [x[3], x[4]]).collect();
+        (time, vec![measure_data, kf_data])
     }
 }
 
@@ -49,11 +51,14 @@ impl eframe::App for GraphView {
         CentralPanel::default().show(ctx, |ui| {
             ui.ctx().request_repaint();
             let mut plot = Plot::new("lines_demo").legend(Legend::default());
-            let data = self.get_data();
+            let (time, data) = self.get_data();
+
+            let measure_points: PlotPoints = PlotPoints::from(data[0].clone());
+            let kf_points: PlotPoints = PlotPoints::from(data[1].clone());
 
             let mut max_x = 0.0;
             let mut max_y = 0.0;
-            for point in data.points() {
+            for point in measure_points.points() {
                 if point.x > max_x {
                     max_x = point.x
                 }
@@ -61,17 +66,25 @@ impl eframe::App for GraphView {
                     max_y = point.y
                 }
             }
-            let line = Line::new(data)
+            let measure_line = Points::new(measure_points)
                 .color(Color32::from_rgb(200, 100, 100))
+                .radius(2.0)
+                .name("Measurements");
+
+            let kf_line = Line::new(kf_points)
+                .color(Color32::from_rgb(100, 100, 200))
                 .style(LineStyle::Solid)
-                .name("wave");
+                .width(3.0)
+                .name("Kalman Filtered");
+
             plot = plot.include_y(max_y);
             plot = plot.include_y(0.0);
             plot = plot.include_x(max_x);
             plot = plot.include_x(0.0);
 
             plot.show(ui, |plot_ui| {
-                plot_ui.line(line);
+                plot_ui.points(measure_line);
+                plot_ui.line(kf_line)
             });
         });
     }
