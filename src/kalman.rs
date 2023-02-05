@@ -2,6 +2,7 @@ use linearkalman::KalmanFilter;
 use rulinalg::matrix::Matrix;
 use rulinalg::vector::Vector;
 
+/// Initialize Kalman filter with problem model
 pub fn init_filter() -> KalmanFilter {
     let dt = 1. / 60.;
     KalmanFilter {
