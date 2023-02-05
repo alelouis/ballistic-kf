@@ -14,7 +14,7 @@ pub fn init_filter() -> KalmanFilter {
             ],
         ),
         // Measurement noise matrix
-        r: Matrix::new(2, 2, vec![1000.0, 0.0, 0.0, 1000.0]),
+        r: Matrix::new(2, 2, vec![10000.0, 0.0, 0.0, 10000.0]),
         // Observation matrix
         h: Matrix::new(2, 4, vec![1., 0., 0., 0., 0., 1., 0., 0.]),
         // State transition matrix

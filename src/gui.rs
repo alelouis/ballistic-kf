@@ -7,13 +7,13 @@ use std::sync::mpsc::Receiver;
 pub struct GraphView {
     label: String,
     initialized: bool,
-    data: Vec<[f64; 5]>,
+    data: Vec<[f64; 7]>,
     #[serde(skip)]
-    rx: Option<Receiver<[f64; 5]>>,
+    rx: Option<Receiver<[f64; 7]>>,
 }
 
 impl GraphView {
-    pub fn new(__cc: &eframe::CreationContext<'_>, rx: Option<Receiver<[f64; 5]>>) -> Self {
+    pub fn new(__cc: &eframe::CreationContext<'_>, rx: Option<Receiver<[f64; 7]>>) -> Self {
         Self {
             label: "Demo GUI".to_owned(),
             initialized: false,
@@ -36,14 +36,13 @@ impl GraphView {
                 .ok();
         }
     }
+}
 
-    fn get_data(&mut self) -> (Vec<f64>, Vec<Vec<[f64; 2]>>) {
-        self.push_data();
-        let time: Vec<f64> = self.data.iter().map(|x| x[0]).collect();
-        let measure_data: Vec<[f64; 2]> = self.data.iter().map(|x| [x[1], x[2]]).collect();
-        let kf_data: Vec<[f64; 2]> = self.data.iter().map(|x| [x[3], x[4]]).collect();
-        (time, vec![measure_data, kf_data])
-    }
+fn wrap_with_time(time: &Vec<f64>, vec: &Vec<f64>) -> Vec<[f64; 2]> {
+    vec.iter()
+        .zip(time)
+        .map(|(v, t)| [t.clone(), v.clone()])
+        .collect()
 }
 
 impl eframe::App for GraphView {
@@ -51,14 +50,24 @@ impl eframe::App for GraphView {
         CentralPanel::default().show(ctx, |ui| {
             ui.ctx().request_repaint();
             let mut plot = Plot::new("lines_demo").legend(Legend::default());
-            let (time, data) = self.get_data();
 
-            let measure_points: PlotPoints = PlotPoints::from(data[0].clone());
-            let kf_points: PlotPoints = PlotPoints::from(data[1].clone());
+            self.push_data();
+            let time: Vec<f64> = self.data.iter().map(|x| x[0]).collect();
+            let m_altitude: Vec<f64> = self.data.iter().map(|x| x[2]).collect();
+            let kf_altitude: Vec<f64> = self.data.iter().map(|x| x[4]).collect();
+            let true_altitude: Vec<f64> = self.data.iter().map(|x| x[6]).collect();
+
+            let m_time_altitude: Vec<[f64; 2]> = wrap_with_time(&time, &m_altitude);
+            let kf_time_altitude: Vec<[f64; 2]> = wrap_with_time(&time, &kf_altitude);
+            let true_time_altitude: Vec<[f64; 2]> = wrap_with_time(&time, &true_altitude);
+
+            let m_altitude_points: PlotPoints = PlotPoints::from(m_time_altitude.clone());
+            let kf_altitude_points: PlotPoints = PlotPoints::from(kf_time_altitude.clone());
+            let true_altitude_points: PlotPoints = PlotPoints::from(true_time_altitude.clone());
 
             let mut max_x = 0.0;
             let mut max_y = 0.0;
-            for point in measure_points.points() {
+            for point in kf_altitude_points.points() {
                 if point.x > max_x {
                     max_x = point.x
                 }
@@ -66,16 +75,22 @@ impl eframe::App for GraphView {
                     max_y = point.y
                 }
             }
-            let measure_line = Points::new(measure_points)
+            let measure_line = Points::new(m_altitude_points)
                 .color(Color32::from_rgb(200, 100, 100))
                 .radius(2.0)
                 .name("Measurements");
 
-            let kf_line = Line::new(kf_points)
-                .color(Color32::from_rgb(100, 100, 200))
+            let kf_line = Line::new(kf_altitude_points)
+                .color(Color32::from_rgb(100, 200, 100))
                 .style(LineStyle::Solid)
                 .width(3.0)
                 .name("Kalman Filtered");
+
+            let true_line = Line::new(true_altitude_points)
+                .color(Color32::from_rgb(100, 100, 200))
+                .style(LineStyle::Solid)
+                .width(3.0)
+                .name("True");
 
             plot = plot.include_y(max_y);
             plot = plot.include_y(0.0);
@@ -84,7 +99,8 @@ impl eframe::App for GraphView {
 
             plot.show(ui, |plot_ui| {
                 plot_ui.points(measure_line);
-                plot_ui.line(kf_line)
+                plot_ui.line(kf_line);
+                plot_ui.line(true_line);
             });
         });
     }

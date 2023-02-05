@@ -2,10 +2,10 @@ use linearkalman::{predict_step, update_step, KalmanState};
 use rand_distr::{Distribution, Normal};
 use rapier2d::prelude::*;
 use rulinalg::vector::Vector as ruVec;
-use serde_json::json;
+// use serde_json::json;
 use std::sync::mpsc::Sender;
 
-pub(crate) fn simulation(tx: Sender<[f64; 5]>) {
+pub(crate) fn simulation(tx: Sender<[f64; 7]>) {
     let mut rigid_body_set = RigidBodySet::new();
     let mut collider_set = ColliderSet::new();
 
@@ -45,10 +45,10 @@ pub(crate) fn simulation(tx: Sender<[f64; 5]>) {
         p: (kf.p0).clone(),
     };
     let mut time = 0.0;
-    let mut dt = 1. / 60.;
+    let dt = 1. / 60.;
 
     /* Run the game loop, stepping the simulation once per frame. */
-    for idx in 0..3000 {
+    for _ in 0..3000 {
         time += dt;
         physics_pipeline.step(
             &gravity,
@@ -69,8 +69,8 @@ pub(crate) fn simulation(tx: Sender<[f64; 5]>) {
         /* Sending simulation data to GUI thread*/
         let ball_body = &rigid_body_set[ball_body_handle];
         let measurements = [
-            ball_body.translation().x as f64 + normal.sample(&mut rand::thread_rng()),
-            ball_body.translation().y as f64 + normal.sample(&mut rand::thread_rng()),
+            ball_body.translation().x as f64 + 10.0 * normal.sample(&mut rand::thread_rng()),
+            ball_body.translation().y as f64 + 10.0 * normal.sample(&mut rand::thread_rng()),
         ];
 
         // Kalman predict and update
@@ -86,6 +86,8 @@ pub(crate) fn simulation(tx: Sender<[f64; 5]>) {
             measurements[1],
             last_state.x[0],
             last_state.x[1],
+            ball_body.translation().x as f64,
+            ball_body.translation().y as f64,
         ];
 
         tx.send(payload)
