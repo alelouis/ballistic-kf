@@ -11,7 +11,7 @@ Small experimentation using [rapier](https://rapier.rs/) physics engine, [linear
 ## **What it does**
 ```./src/physics.rs```  
 I used the [rapier](https://rapier.rs/) physics engine in order to simulate the ballistic trajectory of a rigidbody thrown in the air.  
-Then, I added gaussian errors to true positions in order to simulate real sensors (```./src/physics.rs```).  
+Then, I added gaussian errors to true positions in order to simulate real sensors.  
 
 ```./src/kalman.rs```  
 I then used the crate [linearkalman](https://docs.rs/linearkalman/0.1.3/linearkalman/) to integrate Kalman prediction and update steps following a linear state model in a gravity field without control.
